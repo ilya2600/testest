@@ -50,8 +50,8 @@ The script exits immediately if `DEMO_SEED_ENABLED` is not true. After a success
 
 ## Project layout
 
-- `app.py` — entry point: creates the Flask app (`minisocial.create_app`), runs `init_db()` on startup, `app.run(debug=True)`
-- `minisocial/` — application package: `config`, `db` (SQLite + migrations), `auth`, `services/feed`, route blueprints under `routes/`
+- `app.py` — entry point: `create_app()` then `app.run(debug=True)` when run as main
+- `minisocial/` — application package: `create_app()` calls `init_db()` so Gunicorn and `python app.py` both get migrations; also `config`, `db`, `auth`, `services/feed`, `routes/`
 - `seed_demo.py` — optional demo data seeder (see above)
 - `templates/` — HTML pages
 - `static/style.css` — styles
