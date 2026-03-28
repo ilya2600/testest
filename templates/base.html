@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      (function () {
+        var theme = localStorage.getItem("minisocial-theme") || "light";
+        document.documentElement.classList.toggle("dark-mode", theme === "dark");
+      })();
+    </script>
+    <title>{% block title %}MiniSocial{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  </head>
+  <body>
+    <div class="app-layout">
+      <div class="app-centered-cluster">
+        <aside class="sidebar" aria-label="Navigation">
+          <div class="sidebar-inner">
+            {% if is_authenticated %}
+            <div class="sidebar-user">
+              <div class="sidebar-user-row">
+                {% if current_user_has_avatar %}
+                <img
+                  class="sidebar-avatar-img"
+                  src="{{ url_for('user_avatar', user_id=current_user_id) }}"
+                  alt=""
+                  width="40"
+                  height="40"
+                  decoding="async"
+                />
+                {% else %}
+                <div class="sidebar-avatar-placeholder" aria-hidden="true"></div>
+                {% endif %}
+                <div class="sidebar-user-text">
+                  <span class="sidebar-user-label">Signed in</span>
+                  <span class="sidebar-username">{{ current_username }}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                class="sidebar-pfp-btn"
+                id="open-avatar-pixel-editor"
+                {% if current_user_has_avatar %}data-avatar-src="{{ url_for('user_avatar', user_id=current_user_id) }}"{% endif %}
+              >
+                Edit pixel avatar (8×8)
+              </button>
+            </div>
+
+            <a class="sidebar-link sidebar-link-feed" href="{{ url_for('feed_newest') }}">Feed</a>
+
+            <form
+              id="avatar-upload-form"
+              action="{{ url_for('save_avatar') }}"
+              method="POST"
+              enctype="multipart/form-data"
+              hidden
+              aria-hidden="true"
+            >
+              <input id="avatar-file-input" name="avatar_file" type="file" accept="image/png" />
+            </form>
+
+            <div class="theme-row">
+              <span id="theme-label" class="theme-label">
+                <span class="theme-label-light">Light</span>
+                <span class="theme-label-dark">Dark</span>
+              </span>
+              <button
+                type="button"
+                id="theme-toggle"
+                class="theme-switch sidebar-theme-switch"
+                role="switch"
+                aria-checked="false"
+                aria-label="Toggle dark mode"
+              >
+                <span class="theme-switch-track" aria-hidden="true">
+                  <span class="theme-switch-knob"></span>
+                </span>
+              </button>
+            </div>
+
+            {% if current_role in ("admin", "master") %}
+            <a class="sidebar-link" href="{{ url_for('admin_panel') }}">Admin</a>
+            {% endif %}
+            <form action="{{ url_for('logout') }}" method="POST">
+              <button type="submit" class="sidebar-link">Log out</button>
+            </form>
+            {% else %}
+            <a class="sidebar-link sidebar-link-feed" href="{{ url_for('feed_newest') }}">Feed</a>
+            <div class="theme-row">
+              <span id="theme-label" class="theme-label">
+                <span class="theme-label-light">Light</span>
+                <span class="theme-label-dark">Dark</span>
+              </span>
+              <button
+                type="button"
+                id="theme-toggle"
+                class="theme-switch sidebar-theme-switch"
+                role="switch"
+                aria-checked="false"
+                aria-label="Toggle dark mode"
+              >
+                <span class="theme-switch-track" aria-hidden="true">
+                  <span class="theme-switch-knob"></span>
+                </span>
+              </button>
+            </div>
+            <a class="sidebar-link" href="{{ url_for('login') }}">Log in</a>
+            <a class="sidebar-link sidebar-link-accent" href="{{ url_for('register') }}">Sign up</a>
+            {% endif %}
+            <script>
+              (function () {
+                var d = (localStorage.getItem("minisocial-theme") || "light") === "dark";
+                var sw = document.getElementById("theme-toggle");
+                if (sw) sw.setAttribute("aria-checked", d ? "true" : "false");
+              })();
+            </script>
+          </div>
+        </aside>
+
+        <div class="main-feed">
+          <div class="main-feed-column">
+            {% block feed_tabs %}{% endblock %}
+
+            {% with messages = get_flashed_messages() %}
+            {% if messages %}
+            <ul class="flash-list main-flash">
+              {% for message in messages %}
+              <li class="flash-item">{{ message }}</li>
+              {% endfor %}
+            </ul>
+            {% endif %}
+            {% endwith %}
+
+            {% block content %}{% endblock %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="image-lightbox" class="image-lightbox" hidden role="dialog" aria-modal="true" aria-label="Image viewer">
+      <button type="button" class="image-lightbox-scrim" id="image-lightbox-scrim" aria-label="Close image viewer"></button>
+      <div class="image-lightbox-panel">
+        <div class="image-lightbox-top">
+          <span id="image-lightbox-counter" class="image-lightbox-counter" hidden></span>
+          <button type="button" class="image-lightbox-close compose-close" id="image-lightbox-close" aria-label="Close">✕</button>
+        </div>
+        <div class="image-lightbox-main">
+          <button type="button" class="image-lightbox-nav image-lightbox-prev" id="image-lightbox-prev" aria-label="Previous image" hidden>‹</button>
+          <div class="image-lightbox-stage">
+            <img id="image-lightbox-img" class="image-lightbox-img" alt="" decoding="async" />
+          </div>
+          <button type="button" class="image-lightbox-nav image-lightbox-next" id="image-lightbox-next" aria-label="Next image" hidden>›</button>
+        </div>
+      </div>
+    </div>
+
+    {% if is_authenticated %}
+    <div id="pixel-editor-modal" class="pixel-editor-modal" hidden>
+      <div class="pixel-editor-card" role="dialog" aria-modal="true" aria-labelledby="pixel-editor-title">
+        <div class="pixel-editor-header">
+          <h3 id="pixel-editor-title" class="pixel-editor-title">Draw 8×8 pixel art</h3>
+          <button type="button" class="compose-close" id="pixel-editor-cancel" aria-label="Close">✕</button>
+        </div>
+        <p class="pixel-editor-hint">Paint with any color. The canvas is zoomed for easy editing.</p>
+        <div class="pixel-editor-canvas-wrap">
+          <canvas id="pixel-editor-canvas" width="256" height="256" aria-label="8 by 8 pixel grid"></canvas>
+        </div>
+        <div class="pixel-editor-toolbar">
+          <label class="pixel-editor-color-label">
+            Color
+            <input type="color" id="pixel-editor-color" value="#1d9bf0" />
+          </label>
+          <div class="pixel-editor-tools">
+            <button type="button" class="btn btn-small pixel-tool-btn is-active" id="pixel-editor-tool-pen">Pen</button>
+            <button type="button" class="btn btn-small pixel-tool-btn" id="pixel-editor-tool-eraser">Eraser</button>
+            <button type="button" class="btn btn-small pixel-tool-btn" id="pixel-editor-clear">Clear</button>
+          </div>
+        </div>
+        <div class="pixel-editor-actions">
+          <button type="button" class="btn btn-primary" id="pixel-editor-save">Save PNG</button>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <script type="module" src="{{ url_for('static', filename='emoji-wc.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='app.js') }}"></script>
+    {% if is_authenticated %}
+    <script defer src="{{ url_for('static', filename='pixel-editor.js') }}"></script>
+    {% endif %}
+  </body>
+</html>

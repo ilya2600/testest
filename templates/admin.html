@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+
+{% block title %}MiniSocial - Admin{% endblock %}
+
+{% block content %}
+<section class="card">
+  <h2>Admin Panel</h2>
+  <p class="meta">Role-based controls for users and registration.</p>
+</section>
+
+{% if can_manage_master_controls %}
+<section class="card">
+  <h3>Public Registration</h3>
+  <p class="meta">
+    When off, new accounts cannot register. Current state:
+    <strong>{{ "ON" if registration_enabled else "OFF" }}</strong>
+  </p>
+  <form
+    id="registration-toggle-form"
+    class="registration-toggle-form"
+    action="{{ url_for('toggle_registration') }}"
+    method="POST"
+  >
+    <input type="hidden" name="action" id="registration-action-input" value="" />
+    <div class="theme-row admin-registration-theme-row">
+      <span class="theme-label" id="registration-switch-label">Allow registration</span>
+      <button
+        type="button"
+        id="registration-switch"
+        class="theme-switch {% if registration_enabled %}is-on{% endif %}"
+        role="switch"
+        aria-checked="{{ 'true' if registration_enabled else 'false' }}"
+        aria-labelledby="registration-switch-label"
+      >
+        <span class="theme-switch-track" aria-hidden="true">
+          <span class="theme-switch-knob"></span>
+        </span>
+      </button>
+    </div>
+  </form>
+</section>
+{% endif %}
+
+{% if can_manage_master_controls %}
+<section class="card">
+  <h3>Create User (Master Only)</h3>
+  <form action="{{ url_for('admin_create_user') }}" method="POST">
+    <label for="username">Username</label>
+    <input id="username" name="username" type="text" required />
+
+    <label for="password">Password (min 8 chars)</label>
+    <input id="password" name="password" type="password" minlength="8" required />
+
+    <label for="role">Role</label>
+    <select id="role" name="role">
+      <option value="user">user</option>
+      <option value="admin">admin</option>
+    </select>
+
+    <button class="btn btn-primary" type="submit">Create user</button>
+  </form>
+</section>
+{% endif %}
+
+<section class="card">
+  <h3>Users</h3>
+  <div class="table-wrap">
+    <table class="users-table">
+      <thead>
+        <tr>
+          <th>Username</th>
+          <th>Role</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for user in users %}
+        <tr>
+          <td>{{ user["username"] }}</td>
+          <td>{{ user["role"] }}</td>
+          <td>{{ user["status"] }}</td>
+          <td>
+            <div class="actions">
+              {% if user["status"] == "active" %}
+                {% if current_role == "master" and user["role"] != "master" %}
+                <form action="{{ url_for('archive_user', user_id=user['id']) }}" method="POST">
+                  <button class="btn" type="submit">Archive</button>
+                </form>
+                {% elif current_role == "admin" and user["role"] == "user" %}
+                <form action="{{ url_for('archive_user', user_id=user['id']) }}" method="POST">
+                  <button class="btn" type="submit">Archive</button>
+                </form>
+                {% endif %}
+              {% else %}
+                {% if current_role == "master" and user["role"] != "master" %}
+                <form action="{{ url_for('restore_user', user_id=user['id']) }}" method="POST">
+                  <button class="btn btn-primary" type="submit">Restore</button>
+                </form>
+                {% elif current_role == "admin" and user["role"] == "user" %}
+                <form action="{{ url_for('restore_user', user_id=user['id']) }}" method="POST">
+                  <button class="btn btn-primary" type="submit">Restore</button>
+                </form>
+                {% endif %}
+              {% endif %}
+              {% if current_role == "master" and user["id"] != current_user_id and user["role"] != "master" %}
+              <form action="{{ url_for('delete_user', user_id=user['id']) }}" method="POST" class="confirm-delete-user-form">
+                <button class="btn btn-delete-muted" type="submit">Delete</button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+
+{% block title %}MiniSocial - Feed{% endblock %}
+
+{% block feed_tabs %}
+<nav class="feed-tabs" aria-label="Feed type">
+  <a
+    href="{{ url_for('feed_newest') }}"
+    class="feed-tab {% if feed_type == 'newest' %}is-active{% endif %}"
+  >Newest</a>
+  <a
+    href="{{ url_for('feed_trending') }}"
+    class="feed-tab {% if feed_type == 'trending' %}is-active{% endif %}"
+  >Trending</a>
+</nav>
+{% endblock %}
+
+{% block content %}
+{% if not is_authenticated %}
+<section class="guest-hint">
+  <p class="guest-hint-text">Log in to post and like.</p>
+</section>
+{% endif %}
+
+<section class="feed-stream" aria-label="Posts">
+  {% if posts %}
+  {% for post in posts %}
+  <article class="post-row">
+    <p class="post-author-line">
+      {% if post["author_state"] == "active" and post["author_has_avatar"] and post["author_id"] %}
+      <img
+        class="post-author-avatar"
+        src="{{ url_for('user_avatar', user_id=post['author_id']) }}"
+        alt=""
+        width="28"
+        height="28"
+        loading="lazy"
+        decoding="async"
+      />
+      {% endif %}
+      {% if post["author_state"] == "deleted" %}
+      <span class="post-author-name">user deleted</span>
+      {% elif post["author_state"] == "archived" %}
+      <span class="post-author-name">user deleted</span>
+      {% elif post["author_username"] %}
+      <span class="post-author-name">{{ post["author_username"] }}</span>
+      {% else %}
+      <span class="post-author-name post-author-muted">unknown user</span>
+      {% endif %}
+    </p>
+    <p class="post-content">{{ post["content"] }}</p>
+    {% if post["author_state"] == "active" and post["gallery"] %}
+    {% set gc = post["gallery"]|length %}
+    <div class="post-gallery post-gallery--{{ gc }}" aria-label="Post images">
+      {% for g in post["gallery"] %}
+      <div class="post-gallery-cell">
+        {% if g["has_blob"] %}
+        <img
+          class="post-gallery-img post-image--blob"
+          src="{{ url_for('post_gallery_image', post_id=post['id'], slot=g['position']) }}"
+          alt=""
+          loading="lazy"
+          decoding="async"
+        />
+        {% elif g["image_url"] %}
+        <img
+          class="post-gallery-img"
+          src="{{ g['image_url'] }}"
+          alt=""
+          loading="lazy"
+          decoding="async"
+          referrerpolicy="no-referrer"
+        />
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <p class="post-meta">
+      <span>{{ post["created_at"] }}</span>
+      {% if feed_type == "trending" %}
+      <span class="post-meta-dot">·</span>
+      <span class="post-meta-score">score {{ post["trending_score"] }}</span>
+      {% endif %}
+    </p>
+    <div class="post-actions">
+      {% if is_authenticated %}
+      <form
+        action="{{ url_for('like_post', post_id=post['id']) }}"
+        method="POST"
+        class="like-form"
+        data-post-id="{{ post['id'] }}"
+      >
+        <button type="submit" class="post-action-btn like-button">
+          <span class="like-label">{{ "Liked" if post["liked_by_current_user"] else "Like" }}</span>
+          <span class="like-count">{{ post["likes"] }}</span>
+        </button>
+      </form>
+      {% else %}
+      <span class="post-meta-readonly">{{ post["likes"] }} likes</span>
+      {% endif %}
+      {% if is_authenticated and (current_role in ("admin", "master") or post["author_id"] == current_user_id) %}
+      <form action="{{ url_for('delete_post', post_id=post['id']) }}" method="POST" class="confirm-delete-post-form">
+        <button type="submit" class="post-action-btn post-action-btn-muted">Delete</button>
+      </form>
+      {% endif %}
+    </div>
+  </article>
+  {% endfor %}
+  {% else %}
+  <p class="empty-feed">No posts yet.</p>
+  {% endif %}
+</section>
+
+{% if is_authenticated %}
+<button id="open-compose" class="fab-compose" type="button" aria-label="Create post">+</button>
+
+<div id="compose-modal" class="compose-modal" hidden>
+  <div class="compose-card">
+    <div class="compose-header">
+      <h3 class="compose-title">Create post</h3>
+      <button id="close-compose" class="compose-close" type="button">✕</button>
+    </div>
+    <form id="create-post-form" action="{{ url_for('create_post') }}" method="POST" enctype="multipart/form-data">
+      <label class="sr-only" for="content">Post content</label>
+      <textarea id="content" name="content" class="compose-textarea" rows="3" placeholder="What's happening?" required maxlength="{{ post_max_length }}"></textarea>
+
+      <div class="compose-gallery-section">
+        <p class="compose-gallery-label">Images (up to {{ max_post_images }})</p>
+        <div id="compose-gallery-list" class="compose-gallery-list" aria-live="polite"></div>
+        <div class="compose-gallery-actions">
+          <input
+            type="file"
+            id="compose-add-file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            class="sr-only"
+            tabindex="-1"
+            aria-hidden="true"
+          />
+          <button type="button" class="btn btn-small" id="compose-add-file-btn">Add file</button>
+          <input
+            type="url"
+            id="compose-add-url-input"
+            class="compose-add-url-input"
+            maxlength="1024"
+            placeholder="https://…"
+            aria-label="Image URL to add"
+          />
+          <button type="button" class="btn btn-small" id="compose-add-url-btn">Add URL</button>
+          <button type="button" class="btn btn-small" id="open-compose-pixel-editor">Draw 8×8</button>
+        </div>
+        <p class="compose-media-hint">Build a gallery before posting — file upload, link, or pixel draw. Max {{ post_image_max_kb }} KB per file.</p>
+      </div>
+
+      <p id="form-message" class="form-message" aria-live="polite"></p>
+      <div class="compose-footer">
+        <span id="compose-char-count" class="compose-char-count" aria-live="polite">0 / {{ post_max_length }}</span>
+        <div class="compose-footer-actions">
+          <div class="compose-emoji-wrap">
+            <button
+              type="button"
+              id="emoji-wc-toggle"
+              class="emoji-picker-toggle"
+              aria-label="Add emoji"
+              aria-expanded="false"
+              aria-haspopup="dialog"
+              aria-controls="emoji-wc-popover"
+            >
+              😀
+            </button>
+            <div id="emoji-wc-popover" class="emoji-wc-popover" hidden>
+              <emoji-picker id="emoji-wc-picker" class="emoji-wc-picker"></emoji-picker>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary compose-submit">Post</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
